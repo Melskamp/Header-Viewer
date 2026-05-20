@@ -1,141 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>Message Header Viewer</title>
+  <meta charset="utf-8" />
 
-https://appsforoffice.microsoft.com/lib/1/hosted/Office.jsscript>
+  <title>Message Header Viewer</title>
 
-<style>
-:root {
-  --bg: #0f1115;
-  --surface: #1a1d23;
-  --rowA: #16191f;
-  --rowB: #1e2229;
-  --border: #2b2f36;
-  --text: #e6e6e6;
-  --muted: #a8a8a8;
-  --accent: #5aa9ff;
-  --highlight: #ffeb3b;
-}
+  <!-- REQUIRED: Office.js must be loaded from the official CDN -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/Office.js"></script>
 
-body {
-  margin: 10px;
-  font-family: Segoe UI, Arial, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 13px;
-}
+  <style>
+    body {
+      font-family: Segoe UI, Arial, sans-serif;
+      margin: 10px;
+      font-size: 13px;
+    }
 
-header {
-  font-weight: 600;
-  margin-bottom: 8px;
-}
+    header {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
 
-.toolbar {
-  margin-bottom: 8px;
-}
+    .toolbar {
+      margin-bottom: 8px;
+    }
 
-button {
-  padding: 5px 10px;
-  margin-right: 6px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-}
+    button {
+      padding: 4px 10px;
+      margin-right: 6px;
+      border-radius: 4px;
+      border: 1px solid #888;
+      background: #f5f5f5;
+      cursor: pointer;
+    }
 
-button:hover {
-  background: #222733;
-}
+    button:hover {
+      background: #eaeaea;
+    }
 
-.status {
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 10px;
-}
+    .status {
+      margin: 6px 0;
+      color: #555;
+      font-size: 12px;
+    }
 
-#output {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  max-height: 65vh;
-}
+    .hidden {
+      display: none;
+    }
 
-/* Header rows */
-.header-row {
-  padding: 6px 8px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: Consolas, monospace;
-}
+    textarea {
+      width: 100%;
+      height: 80px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
 
-.row-a { background: var(--rowA); }
-.row-b { background: var(--rowB); }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0d0d0d;
+      color: #f1f1f1;
+      padding: 8px;
+      border-radius: 4px;
+      max-height: 55vh;
+      overflow-y: auto;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
 
-.header-name {
-  color: var(--accent);
-  font-weight: 600;
-}
+    mark {
+      background: #ffeb3b;
+      color: #000;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
 
-mark {
-  background: var(--highlight);
-  color: #000;
-  padding: 0 2px;
-  border-radius: 2px;
-}
-
-#settingsPanel {
-  margin-top: 10px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #14171c;
-}
-
-.hidden {
-  display: none;
-}
-
-textarea {
-  width: 100%;
-  height: 80px;
-  margin-top: 6px;
-  padding: 6px;
-  border-radius: 6px;
-  background: #0c0f13;
-  color: var(--text);
-  border: 1px solid var(--border);
-  font-family: Consolas, monospace;
-}
-</style>
+    .section {
+      margin-top: 10px;
+    }
+  </style>
 </head>
 
 <body>
+  <header>Message Header Viewer</header>
 
-<header>Message Header Viewer</header>
-
-<div class="toolbar">
-  <button id="btnRefresh">Refresh</button>
-  <button id="btnSettings">Settings</button>
-</div>
-
-<div id="status" class="status">Select a message and click Refresh.</div>
-
-<div id="output">(no headers loaded)</div>
-
-<div id="settingsPanel" class="hidden">
-  <div>Highlight words (one per line)</div>
-  <textarea id="wordsBox"></textarea>
-  <div style="margin-top:6px;">
-    <button id="btnSaveSettings">Save</button>
-    <button id="btnCloseSettings">Close</button>
+  <div class="toolbar">
+    <button id="btnRefresh">Refresh Headers</button>
+    <button id="btnSettings">Settings</button>
   </div>
-  <div id="settingsStatus" class="status"></div>
-</div>
 
-<script src="./taskpane.js"></script>
+  <div id="status" class="status">Select a message and click “Refresh Headers”.</div>
 
+  <!-- Header output -->
+  <pre id="output">(no headers loaded)</pre>
+
+  <!-- Settings panel -->
+  <div id="settingsPanel" class="section hidden">
+    <div><strong>Highlight words</strong> (one per line)</div>
+    <textarea id="wordsBox" placeholder="spf\ndkim\ndmarc"></textarea>
+    <div style="margin-top:6px;">
+      <button id="btnSaveSettings">Save</button>
+      <button id="btnCloseSettings">Close</button>
+    </div>
+    <div id="settingsStatus" class="status"></div>
+  </div>
+
+  <script src="taskpane.js"></script>
 </body>
 </html>
