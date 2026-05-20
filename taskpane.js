@@ -134,6 +134,7 @@ function openSettings() {
 
 function closeSettings() {
   document.getElementById("settingsPanel").classList.add("hidden");
+  refreshHeaders();
 }
 
 function saveSettings() {
