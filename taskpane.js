@@ -8,7 +8,7 @@ Office.onReady((info) => {
 
   wireEvents();
   loadSettings();
-  refreshHeaders();
+  
 });
 
 function wireEvents() {
