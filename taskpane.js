@@ -1,19 +1,17 @@
 /* global Office */
 
 const SETTINGS_KEY = "highlightWords";
-
 let highlightWords = [];
 
-// -------- Initialization --------
-
 Office.onReady((info) => {
-  if (info.host !== Office.HostType.Outlook) {
-    return;
-  }
+  if (info.host !== Office.HostType.Outlook) return;
 
   wireEvents();
   loadSettings();
+  refreshHeaders();
 });
+
+/* ---------- Events ---------- */
 
 function wireEvents() {
   document.getElementById("btnRefresh")
@@ -29,72 +27,104 @@ function wireEvents() {
     .addEventListener("click", closeSettings);
 }
 
-// -------- Core logic --------
+/* ---------- Core ---------- */
 
 function refreshHeaders() {
-  const status = document.getElementById("status");
-  const output = document.getElementById("output");
-
   const item = Office.context.mailbox.item;
+  const status = document.getElementById("status");
 
   if (!item || typeof item.getAllInternetHeadersAsync !== "function") {
     status.textContent = "No message selected.";
-    output.textContent = "";
+    renderEmpty();
     return;
   }
 
-  status.textContent = "Reading headers…";
+  status.textContent = "Reading headers...";
 
   item.getAllInternetHeadersAsync((result) => {
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      status.textContent = "Failed to read headers: " +
-        (result.error && result.error.message);
-      output.textContent = "";
+      status.textContent = "Error: " + (result.error?.message || "Unknown error");
+      renderEmpty();
       return;
     }
 
-    const headers = result.value || "";
+    const raw = (result.value || "").trim();
 
-    if (!headers.trim()) {
-      status.textContent = "No headers returned for this message.";
-      output.textContent = "(empty)";
+    if (!raw) {
+      status.textContent = "No headers returned.";
+      renderEmpty("(empty)");
       return;
     }
 
-    status.textContent = "Headers loaded.";
-    renderHeaders(headers);
+    renderHeaders(raw);
+    status.textContent = "Done.";
   });
 }
 
-// -------- Rendering --------
+/* ---------- Rendering ---------- */
 
-function renderHeaders(headersText) {
-  const output = document.getElementById("output");
+function renderHeaders(raw) {
+  const container = document.getElementById("output");
+  container.innerHTML = "";
 
-  let html = escapeHtml(headersText);
+  const headers = splitHeaders(raw);
 
-  if (highlightWords.length > 0) {
-    const regex = new RegExp(
-      "(" + highlightWords.map(escapeRegex).join("|") + ")",
-      "gi"
-    );
-    html = html.replace(regex, "<mark>$1</mark>");
+  let rowIndex = 0;
+
+  for (const header of headers) {
+    if (!header.trim()) continue; // skip blanks
+
+    const row = document.createElement("div");
+    row.className = "header-row " + (rowIndex % 2 ? "row-b" : "row-a");
+
+    let html = escapeHtml(header);
+
+    // highlight words
+    if (highlightWords.length > 0) {
+      const regex = new RegExp(
+        "(" + highlightWords.map(escapeRegex).join("|") + ")",
+        "gi"
+      );
+      html = html.replace(regex, "<mark>$1</mark>");
+    }
+
+    // highlight header name (before first colon)
+    html = html.replace(/^([^:]+:)/, '<span class="header-name">$1</span>');
+
+    row.innerHTML = html;
+    container.appendChild(row);
+
+    rowIndex++;
   }
-
-  output.innerHTML = html;
 }
 
-// -------- Settings --------
+/* ---------- Header splitting (RFC-safe) ---------- */
+
+function splitHeaders(raw) {
+  const lines = raw.split(/\r?\n/);
+  const headers = [];
+  let current = "";
+
+  for (const line of lines) {
+    if (/^[ \t]/.test(line)) {
+      // continuation line
+      current += "\n" + line;
+    } else {
+      if (current) headers.push(current);
+      current = line;
+    }
+  }
+
+  if (current) headers.push(current);
+
+  return headers;
+}
+
+/* ---------- Settings ---------- */
 
 function loadSettings() {
-  const settings = Office.context.roamingSettings;
-  const stored = settings.get(SETTINGS_KEY);
-
-  if (Array.isArray(stored)) {
-    highlightWords = normalizeWords(stored);
-  } else {
-    highlightWords = [];
-  }
+  const stored = Office.context.roamingSettings.get(SETTINGS_KEY);
+  highlightWords = Array.isArray(stored) ? stored : [];
 }
 
 function openSettings() {
@@ -104,58 +134,38 @@ function openSettings() {
 
 function closeSettings() {
   document.getElementById("settingsPanel").classList.add("hidden");
-  document.getElementById("settingsStatus").textContent = "";
 }
 
 function saveSettings() {
-  const raw = document.getElementById("wordsBox").value || "";
-  const words = normalizeWords(raw.split(/\r?\n/));
+  const raw = document.getElementById("wordsBox").value;
 
-  const settings = Office.context.roamingSettings;
-  settings.set(SETTINGS_KEY, words);
+  const words = raw
+    .split(/\r?\n/)
+    .map(w => w.trim())
+    .filter(Boolean);
 
-  settings.saveAsync((result) => {
-    const status = document.getElementById("settingsStatus");
+  // dedupe (case-insensitive)
+  highlightWords = [...new Set(words)];
 
-    if (result.status === Office.AsyncResultStatus.Succeeded) {
-      highlightWords = words;
-      status.textContent = "Saved.";
-    } else {
-      status.textContent = "Save failed: " +
-        (result.error && result.error.message);
-    }
-  });
+  Office.context.roamingSettings.set(SETTINGS_KEY, highlightWords);
+  Office.context.roamingSettings.saveAsync();
+
+  document.getElementById("settingsStatus").textContent = "Saved.";
 }
 
-// -------- Helpers --------
+/* ---------- Helpers ---------- */
 
-function normalizeWords(words) {
-  const seen = new Set();
-  const cleaned = [];
-
-  for (const w of words) {
-    const t = String(w).trim();
-    if (!t) continue;
-
-    const key = t.toLowerCase();
-    if (seen.has(key)) continue;
-
-    seen.add(key);
-    cleaned.push(t);
-  }
-
-  return cleaned;
+function renderEmpty(text = "") {
+  document.getElementById("output").textContent = text;
 }
 
 function escapeHtml(text) {
-  return String(text)
+  return text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll(">", "&gt;");
 }
 
 function escapeRegex(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
