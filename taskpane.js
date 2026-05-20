@@ -1,14 +1,18 @@
 /* global Office */
 
 const SETTINGS_KEY = "highlightWords";
+
 let highlightWords = [];
 
+// -------- Initialization --------
+
 Office.onReady((info) => {
-  if (info.host !== Office.HostType.Outlook) return;
+  if (info.host !== Office.HostType.Outlook) {
+    return;
+  }
 
   wireEvents();
   loadSettings();
-  
 });
 
 function wireEvents() {
@@ -25,120 +29,133 @@ function wireEvents() {
     .addEventListener("click", closeSettings);
 }
 
-/* ---------- Core ---------- */
+// -------- Core logic --------
 
 function refreshHeaders() {
-  const item = Office.context.mailbox.item;
   const status = document.getElementById("status");
+  const output = document.getElementById("output");
+
+  const item = Office.context.mailbox.item;
 
   if (!item || typeof item.getAllInternetHeadersAsync !== "function") {
     status.textContent = "No message selected.";
+    output.textContent = "";
     return;
   }
 
-  status.textContent = "Reading headers...";
+  status.textContent = "Reading headers…";
 
   item.getAllInternetHeadersAsync((result) => {
     if (result.status !== Office.AsyncResultStatus.Succeeded) {
-      status.textContent = result.error.message;
+      status.textContent = "Failed to read headers: " +
+        (result.error && result.error.message);
+      output.textContent = "";
       return;
     }
 
-    renderHeaders(result.value || "");
-    status.textContent = "Done.";
+    const headers = result.value || "";
+
+    if (!headers.trim()) {
+      status.textContent = "No headers returned for this message.";
+      output.textContent = "(empty)";
+      return;
+    }
+
+    status.textContent = "Headers loaded.";
+    renderHeaders(headers);
   });
 }
 
-/* ---------- Header rendering ---------- */
+// -------- Rendering --------
 
-function renderHeaders(raw) {
-  const container = document.getElementById("output");
-  container.innerHTML = "";
+function renderHeaders(headersText) {
+  const output = document.getElementById("output");
 
-  const headers = splitHeaders(raw);
+  let html = escapeHtml(headersText);
 
-  headers.forEach((header, index) => {
-    const row = document.createElement("div");
-    row.className = "header-row " + (index % 2 ? "row-b" : "row-a");
-
-    let html = escapeHtml(header);
-
-    // highlight words
-    if (highlightWords.length > 0) {
-      const regex = new RegExp(
-        "(" + highlightWords.map(escapeRegex).join("|") + ")",
-        "gi"
-      );
-      html = html.replace(regex, "<mark>$1</mark>");
-    }
-
-    // style header name (text before first colon)
-    html = html.replace(/^([^:]+:)/, '<span class="header-name">$1</span>');
-
-    row.innerHTML = html;
-    container.appendChild(row);
-  });
-}
-
-/* ---------- Split headers properly ---------- */
-
-function splitHeaders(raw) {
-  const lines = raw.split(/\r?\n/);
-  const headers = [];
-
-  let current = "";
-
-  for (const line of lines) {
-    if (/^[ \\t]/.test(line)) {
-      // continuation
-      current += "\\n" + line;
-    } else {
-      if (current) headers.push(current);
-      current = line;
-    }
+  if (highlightWords.length > 0) {
+    const regex = new RegExp(
+      "(" + highlightWords.map(escapeRegex).join("|") + ")",
+      "gi"
+    );
+    html = html.replace(regex, "<mark>$1</mark>");
   }
 
-  if (current) headers.push(current);
-  return headers;
+  output.innerHTML = html;
 }
 
-/* ---------- Settings ---------- */
+// -------- Settings --------
 
 function loadSettings() {
-  const stored = Office.context.roamingSettings.get(SETTINGS_KEY);
-  highlightWords = Array.isArray(stored) ? stored : [];
+  const settings = Office.context.roamingSettings;
+  const stored = settings.get(SETTINGS_KEY);
+
+  if (Array.isArray(stored)) {
+    highlightWords = normalizeWords(stored);
+  } else {
+    highlightWords = [];
+  }
 }
 
 function openSettings() {
   document.getElementById("settingsPanel").classList.remove("hidden");
-  document.getElementById("wordsBox").value = highlightWords.join("\\n");
+  document.getElementById("wordsBox").value = highlightWords.join("\n");
 }
 
 function closeSettings() {
   document.getElementById("settingsPanel").classList.add("hidden");
+  document.getElementById("settingsStatus").textContent = "";
 }
 
 function saveSettings() {
-  const raw = document.getElementById("wordsBox").value;
-  const words = raw.split(/\\r?\\n/).map(x => x.trim()).filter(Boolean);
+  const raw = document.getElementById("wordsBox").value || "";
+  const words = normalizeWords(raw.split(/\r?\n/));
 
-  highlightWords = [...new Set(words.map(w => w.toLowerCase()))];
+  const settings = Office.context.roamingSettings;
+  settings.set(SETTINGS_KEY, words);
 
-  Office.context.roamingSettings.set(SETTINGS_KEY, highlightWords);
-  Office.context.roamingSettings.saveAsync();
+  settings.saveAsync((result) => {
+    const status = document.getElementById("settingsStatus");
 
-  document.getElementById("settingsStatus").textContent = "Saved.";
+    if (result.status === Office.AsyncResultStatus.Succeeded) {
+      highlightWords = words;
+      status.textContent = "Saved.";
+    } else {
+      status.textContent = "Save failed: " +
+        (result.error && result.error.message);
+    }
+  });
 }
 
-/* ---------- Helpers ---------- */
+// -------- Helpers --------
+
+function normalizeWords(words) {
+  const seen = new Set();
+  const cleaned = [];
+
+  for (const w of words) {
+    const t = String(w).trim();
+    if (!t) continue;
+
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    cleaned.push(t);
+  }
+
+  return cleaned;
+}
 
 function escapeHtml(text) {
-  return text
+  return String(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
