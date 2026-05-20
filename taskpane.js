@@ -15,7 +15,7 @@ Office.onReady((info) => {
 
   // Optional: auto-refresh on first open (safe + convenient)
   // Comment out if you want strict manual refresh only.
-  // refreshHeaders();
+  refreshHeaders();
 });
 
 function wireEvents() {
